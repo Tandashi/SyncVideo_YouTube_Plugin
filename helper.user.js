@@ -9,9 +9,9 @@
 
 // @icon        http://www.genyoutube.net/helper/favicon.png
 // @icon64      http://www.genyoutube.net/helper/favicon.png
-// @homepage    https://tandashi.de/
-// @downloadURL https://tandashi.de/helper.user.js
-// @updateURL   https://tandashi.de/helper.user.js
+// @homepage    https://github.com/Tandashi/SyncVideo_YouTube_Plugin/
+// @downloadURL https://github.com/Tandashi/SyncVideo_YouTube_Plugin/raw/master/helper.user.js
+// @updateURL   https://github.com/Tandashi/SyncVideo_YouTube_Plugin/raw/master/helper.user.js
 
 
 // @run-at      document-end
