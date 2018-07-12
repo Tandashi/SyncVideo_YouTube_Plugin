@@ -9,5 +9,6 @@ You can get Tempermonkey from here:
 Recommended Version: v4.6 by Jan Biniok
 
 ## Installation
-https://github.com/Tandashi/SyncVideo_YouTube_Plugin/raw/master/helper.user.js
+Open this Link: https://github.com/Tandashi/SyncVideo_YouTube_Plugin/raw/master/helper.user.js  
+Then click on install.
 
