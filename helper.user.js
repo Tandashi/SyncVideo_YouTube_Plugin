@@ -1,18 +1,19 @@
 // ==UserScript==
-// @name        Sync-Video YT Helper
+// @name        YouTube Sync-Video Extension
 // @namespace   https://tandashi.de
 // @author      Tandashi
-// @version     0.4
+// @version     0.5
 // @description This userscript assists sync-video from Youtube.
 // @match       *://www.youtube.com/*
+// @match       *://youtube.com/*
+// @match       *://www.sync-video.com/r/*
 // @match       *://sync-video.com/r/*
 
 // @icon        http://www.genyoutube.net/helper/favicon.png
 // @icon64      http://www.genyoutube.net/helper/favicon.png
-// @homepage    https://github.com/Tandashi/SyncVideo_YouTube_Plugin/
+// @homepage    https://tandashi.de/
 // @downloadURL https://github.com/Tandashi/SyncVideo_YouTube_Plugin/raw/master/helper.user.js
 // @updateURL   https://github.com/Tandashi/SyncVideo_YouTube_Plugin/raw/master/helper.user.js
-
 
 // @run-at      document-end
 // @grant       GM_setValue
@@ -21,201 +22,316 @@
 // ==/UserScript==
 
 // ==Config==
-var show_on_results = true;
+const showAt = {
+	'home': true,
+	'watch': true,
+	'results': true
+}
+
+const roomId = ""; // Leave empty if it should be randomly generated
+const randomRoomIdLength = 5; // The length of the random generated id of 'roomId' is empty
 // ==/Config==
 
-if(window.location.href.indexOf("youtube.com") > -1){
-    if(document.getElementById("polymer-app") || document.getElementById("masthead") || window.Polymer){
-        setInterval(function(){
-            if(window.location.href.indexOf("watch?v=") < 0){return false;}
-
-            if(document.getElementById("count") && document.getElementById("syncvideo") === null){
-                polymerInject();
-            }
-        }, 100);
-    }
-    else {
-        setInterval(function(){
-            if(window.location.href.indexOf("watch?v=") < 0){return false;}
-
-            if(document.getElementById("watch7-subscription-container") && document.getElementById("syncvideo") === null){
-                htmlInject();
-            }
-        }, 100);
-    }
-
-    if(show_on_results){
-        setInterval(function(){
-            if(window.location.href.indexOf("results?search_query=") < 0){return false;}
-
-            var page_manager = document.querySelector("ytd-search.ytd-page-manager");
-            var results;
-
-            if(page_manager == null || page_manager == undefined){
-                results = document.querySelector("div#contents.ytd-item-section-renderer");
-            }
-            else{
-                results = page_manager.querySelector("div#contents.ytd-item-section-renderer");
-            }
-
-            if(results == null || results == undefined){
-                return;
-            }
-
-            Array.from(results.children).forEach(function(element){
-                if(element.classList.contains("sync_added")){
-                    return;
-                }
-
-                var text_wrap = element.querySelector("div.text-wrapper");
-
-                if(text_wrap == null || text_wrap == undefined){
-                    return;
-                }
-
-                var syncButton = document.createElement("a");
-                syncButton.appendChild(document.createTextNode("Sync"));
-                syncButton.style.width = "6%";
-                syncButton.style.backgroundColor = "#b27900";
-                syncButton.style.color = "white";
-                syncButton.style.textAlign = "center";
-                syncButton.style.padding = "2px 5px";
-                syncButton.style.margin = "1% 0px 0px 0px";
-                syncButton.style.fontSize = "12px";
-                syncButton.style.border = "0";
-                syncButton.style.cursor = "pointer";
-                syncButton.style.fontFamily = "Roboto, Arial, sans-serif";
-                syncButton.style.textDecoration = "none";
-
-                syncButton.addEventListener("mouseover", function(event){
-                    event.target.style.backgroundColor = "#cfc800";
-                }, false);
-
-                syncButton.addEventListener("mouseleave", function(event){
-                    event.target.style.backgroundColor = "#b27900";
-                }, false);
-
-                syncButton.onclick = function(){
-                    GM_setValue("sync-video_add", element.querySelector("a#thumbnail").href);
-                }
-
-                text_wrap.insertBefore(syncButton, text_wrap.children[1]);
-                element.classList.add("sync_added");
-            });
-        }, 100);
-    }
+const buttonStyles = {
+  'home' : {
+    'width': '50%',
+    'background-color': '#b27900',
+    'color': 'white',
+    'text-align': 'center',
+    'padding': '1px 4px 1px 4px',
+    'margin': '10px 10px 10px 0px',
+    'font-size': '14px',
+    'border': '0',
+    'cursor': 'pointer',
+    'border-radius': '2px',
+    'font-family': 'Roboto, Arial, sans-serif',
+    'text-decoration': 'none'
+	},
+	'watch' : {
+		'width': '100%',
+    'background-color': '#b27900',
+    'color': 'white',
+    'text-align': 'center',
+    'padding': '3px 6px 3px 6px',
+    'margin': '10px 10px 10px 0px',
+    'font-size': '14px',
+    'border': '0',
+    'cursor': 'pointer',
+    'border-radius': '2px',
+    'font-family': 'Roboto, Arial, sans-serif',
+    'text-decoration': 'none'
+	},
+	'results' : {
+    'width': '50%',
+    'background-color': '#b27900',
+    'color': 'white',
+    'text-align': 'center',
+    'padding': '1px 4px 1px 4px',
+    'margin': '10px 10px 10px 0px',
+    'font-size': '14px',
+    'border': '0',
+    'cursor': 'pointer',
+    'border-radius': '2px',
+    'font-family': 'Roboto, Arial, sans-serif',
+    'text-decoration': 'none'
+	},
 }
 
-if(window.location.href.indexOf("sync-video.com") > -1){
-    setInterval(function() {
-        var video_link = GM_getValue("sync-video_add", -1);
-        if(video_link != -1){
-            playlistAddInput.value = video_link;
-            addToPlaylist();
-            GM_deleteValue("sync-video_add");
-        }
-    }, 1000);
+const intervals = {};
+const STORAGE_VALUE = 'syncyt';
+
+window.onload = () => {
+	var oldLocation = undefined;
+
+	// Set an Interval to check if the path location has changed
+	// The only way I found to determin if something changed
+	// e.g. If the user clicked on a Video or something like that
+	// since the window will not be loaded again. The hasChanged Listener
+	// also did'nt work for me
+	intervals.main = setInterval(() => {
+		if(oldLocation === window.location.pathname)
+			return false;
+
+		// Check which site we are on
+		switch(window.location.hostname) {
+			case 'www.youtube.com':
+			case 'youtube.com':
+				injectYoutTube();
+				break;
+
+			case 'www.sync-video.com':
+			case 'sync-video.com':
+				injectSyncVideo();
+				break;
+		}
+
+		oldLocation = window.location.pathname;
+	}, 100);
 }
 
-function htmlInject(){
-    if (document.getElementById("watch7-subscription-container")) {
-        var wrap = document.getElementById('watch7-subscription-container');
-        var button = "<div id='syncvideo' style='display: inline-block; margin-left: 10px; vertical-align: middle;'>";
-        button += "<a href=\"https://sync-video.com/r/" + makeid() + "\" title=\"Sync this Video\" target=\"_blank\"" +
-            "style=\"display: inline-block; font-size: inherit; height: 22px; border: 1px solid rgb(0, 183, 90); border-radius: 3px; padding-left: 28px; cursor: pointer; vertical-align: middle; position: relative; line-height: 22px; text-decoration: none; z-index: 1; color: rgb(255, 255, 255);\">";
-        button += "<i style=\"position: absolute; display: inline-block; left: 6px; top: 3px; background-image: url(data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6Y2M9Imh0dHA6Ly9jcmVhdGl2ZWNvbW1vbnMub3JnL25zIyIgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIiB4bWxuczpzdmc9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMSIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiB2aWV3Qm94PSIwIDAgMTYgMTYiIGlkPSJzdmcyIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJNIDQsMCA0LDggMCw4IDgsMTYgMTYsOCAxMiw4IDEyLDAgNCwwIHoiIGZpbGw9IiNmZmZmZmYiIC8+PC9zdmc+); background-size: 12px; background-repeat: no-repeat; background-position: center center; width: 16px; height: 16px;\"></i>";
-        button += "<span style=\"padding-right: 12px;\">Sync</span></a></div>";
-        var style = "<style>#syncvideo button::-moz-focus-inner{padding:0;margin:0}#syncvideo a{background-color:#00B75A}#syncvideo a:hover{background-color:rgb(0, 163, 80)}#syncvideo a:active{background-color:rgb(0, 151, 74)}</style>";
-        var tmp = wrap.innerHTML;
-        wrap.innerHTML = tmp + button + style;
-    }
+/**
+ * Inject SyncVideo Buttons to YouTube.
+ * Will automatically determin which inject-Methods should be called.
+ * You do not need to call any other inject Methods
+ */
+function injectYoutTube() {
+	if(intervals.grid !== undefined) {
+		clearInterval(intervals.grid);
+		delete intervals.grid;
+	}
+
+  switch(window.location.pathname) {
+    case '/':
+			if(showAt.home)
+				injectYouTubeGrid(buttonStyles.home);
+			break;
+
+		case '/results':
+			if(showAt.results)
+			injectYouTubeGrid(buttonStyles.results);
+			break;
+
+		case '/watch':
+			if(showAt.watch)
+				injectYouTubeWatch();
+			break;
+	}
 }
 
-function polymerInject(){
-    /* Create button */
-    var buttonDiv = document.createElement("span");
-    buttonDiv.style.width = "100%";
-    buttonDiv.id = "syncvideo";
+/**
+ * Inject SyncVideo Buttons to YouTube when grid-video-renderer/video-rederen are used
+ *
+ * @param {Object} style The Button Style
+ */
+function injectYouTubeGrid(style) {
+	var oldCount = 0;
 
-    var createButton = document.createElement("a");
-    createButton.appendChild(document.createTextNode("Sync Create"));
+	intervals.grid = setInterval(() => {
+		const grid_videos = document.getElementsByTagName('ytd-grid-video-renderer');
+		const solo_videos = document.getElementsByTagName('ytd-video-renderer');
 
-    createButton.style.width = "100%";
-    createButton.style.backgroundColor = "#b27900";
-    createButton.style.color = "white";
-    createButton.style.textAlign = "center";
-    createButton.style.padding = "5px 10px";
-    createButton.style.margin = "0px 10px";
-    createButton.style.fontSize = "14px";
-    createButton.style.border = "0";
-    createButton.style.cursor = "pointer";
-    createButton.style.borderRadius = "2px";
-    createButton.style.fontFamily = "Roboto, Arial, sans-serif";
-    createButton.style.textDecoration = "none";
-    createButton.href = "https://sync-video.com/r/" + makeid();
-    createButton.target = "_blank";
+		var videos = [];
+		videos = Array.prototype.concat.apply(videos, grid_videos);
+		videos = Array.prototype.concat.apply(videos, solo_videos);
 
-    createButton.addEventListener("mouseover", function(event){
-        event.target.style.backgroundColor = "#cfc800";
-    }, false);
+		if(oldCount === videos.length)
+			return false;
 
-    createButton.addEventListener("mouseleave", function(event){
-        event.target.style.backgroundColor = "#b27900";
-    }, false);
+		// Loop through all Grid Videos
+		for(var vi = 0; vi < videos.length; vi++) {
+			const video = videos[vi];
+			const buttons = video.querySelector('#buttons');
 
-    createButton.onclick = function(){
-        GM_setValue("sync-video_add", window.location.href);
-    }
+			if(buttons !== null && buttons !== undefined && buttons.children.length === 0) {
+				const video_link = video.querySelector('a#video-title').href;
+				buttons.appendChild(getSyncButtonBarInject(style, video_link, video_link));
+				buttons.style.margin = '10px 0px 0px 0px';
+			}
+		}
 
-    var addButton = document.createElement("a");
-    addButton.appendChild(document.createTextNode("Sync Add"));
-
-    addButton.style.width = "100%";
-    addButton.style.backgroundColor = "#b27900";
-    addButton.style.color = "white";
-    addButton.style.textAlign = "center";
-    addButton.style.padding = "5px 10px";
-    addButton.style.margin = "0px 10px";
-    addButton.style.fontSize = "14px";
-    addButton.style.border = "0";
-    addButton.style.cursor = "pointer";
-    addButton.style.borderRadius = "2px";
-    addButton.style.fontFamily = "Roboto, Arial, sans-serif";
-    addButton.style.textDecoration = "none";
-
-    addButton.addEventListener("mouseover", function(event){
-        event.target.style.backgroundColor = "#cfc800";
-    }, false);
-
-    addButton.addEventListener("mouseleave", function(event){
-        event.target.style.backgroundColor = "#b27900";
-    }, false);
-
-    addButton.onclick = function(){
-        GM_setValue("sync-video_add", window.location.href);
-    }
-
-    buttonDiv.appendChild(createButton);
-    buttonDiv.appendChild(addButton);
-
-    /* Find and add to target */
-    var targetElement = document.querySelectorAll("[id='count']");
-    for(var i = 0; i < targetElement.length; i++){
-        if(targetElement[i].className.indexOf("ytd-video-primary-info-renderer") > -1){
-            targetElement[i].appendChild(buttonDiv);
-        }
-    }
+		oldCount = videos.length;
+	}, 1000);
 }
 
-function makeid() {
-  var text = "";
-  var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+/**
+ * Inject SyncVideo Buttons to YouTube when you watch a Video
+ */
+function injectYouTubeWatch() {
+	const info = document.getElementsByTagName('ytd-video-primary-info-renderer')[0];
+	const container = info.querySelector('#container');
+	container.appendChild(getSyncButtonBarInject(buttonStyles.watch));
+}
 
-  for (var i = 0; i < 5; i++){
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
+/**
+ * Inject the SyncVideo part
+ */
+function injectSyncVideo() {
+  setInterval(() => {
+		// Check if user already joined a room
+		const username_field = document.getElementById('current-username');
+		if(username_field.childNodes.length === 0)
+			return false;
+
+    const video_link = getNextVideoInStorage();
+    if(video_link !== null){
+        // Change playListInput value to video link
+        // Is defined in global scope of sync-video
+        playlistAddInput.value = video_link;
+        // Execute the addToPlaylist event from sync-video
+        addToPlaylist();
+    }
+  }, 1000);
+}
+
+/**
+ * Get SyncVideo Room ID
+ */
+function getRoomId() {
+  if(roomId.length > 0)
+    return roomId;
+
+  var id = "";
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+  for (var i = 0; i < randomRoomIdLength; i++){
+    id += possible.charAt(Math.floor(Math.random() * possible.length));
   }
-  return text;
+
+  return id;
 }
 
+/**
+ * Get the Add Button
+ *
+ * @param {Object} style The Button Style
+ * @param {String} video_link Overwrite the Video link added to Storage
+ */
+function getSyncAddButtonInject(style, video_link = window.location.href) {
+  const addButton = document.createElement("a");
+  addButton.appendChild(document.createTextNode("Sync Add"));
+
+  Object.keys(style).forEach((key) => {
+    addButton.style.setProperty(key, style[key]);
+  });
+
+  addButton.onclick = () => {
+  	addVideoToStorage(video_link);
+  }
+
+  return addButton;
+}
+
+/**
+ * Get the Create Button
+ *
+ * @param {Object} style The Button Style
+ * @param {String} video_link Overwrite the Video link added to Storage
+ */
+function getSyncCreateButtonInject(style, video_link = window.location.href) {
+  const createButton = document.createElement("a");
+  createButton.appendChild(document.createTextNode("Sync Create"));
+
+  Object.keys(style).forEach((key) => {
+    createButton.style.setProperty(key, style[key]);
+  });
+
+  createButton.href = "https://sync-video.com/r/" + getRoomId();
+  createButton.target = "_blank";
+  createButton.onclick = () => {
+    addVideoToStorage(video_link);
+	}
+
+  return createButton;
+}
+
+/**
+ * Get the Button Bar
+ *
+ * @param {Object} style The Button Style
+ * @param {String} create_video_link Video link added to Storage if create button clicked. Null = default
+ * @param {String} add_video_link Video link added to Storage if add button clicked. Null = default
+ */
+function getSyncButtonBarInject(style, create_video_link = null, add_video_link = null) {
+  const buttonBar = document.createElement("span");
+  buttonBar.style.width = "100%";
+  buttonBar.id = "syncvideo";
+
+  var createButton, addButton;
+
+  if(create_video_link !== null)
+    createButton = getSyncCreateButtonInject(style, create_video_link);
+  else
+    createButton = getSyncCreateButtonInject(style);
+
+  buttonBar.appendChild(createButton);
 
 
+  if(add_video_link !== null)
+    addButton = getSyncAddButtonInject(style, add_video_link);
+  else
+    addButton = getSyncAddButtonInject(style);
+
+  buttonBar.appendChild(addButton);
+  return buttonBar;
+}
+
+/**
+ * Get the next Video URL that is stored in Storage.
+ * This Method will also delete the URL from Storage if 'should_delete' is not set to false
+ *
+ * @param {Boolean} should_delete If set to false URL will not be deleted from Storage
+ *
+ * @returns {String | null} Return the URL or Null if no URL was found
+ */
+function getNextVideoInStorage(should_delete = true) {
+	const old = GM_getValue(STORAGE_VALUE, null);
+
+	if(old === null || old === [])
+		return null;
+
+	const json = JSON.parse(old);
+	const object = json.pop();
+
+	if(should_delete)
+		GM_setValue(STORAGE_VALUE, JSON.stringify(json));
+	
+	return object;
+}
+
+/**
+ * Add a Video URL to the Storage to be added to SyncVideo
+ *
+ * @param {String} video_link The Video URL to store
+ */
+function addVideoToStorage(video_link) {
+	const old = GM_getValue(STORAGE_VALUE, null);
+
+	if(old === null) {
+		GM_setValue(STORAGE_VALUE, JSON.stringify([video_link]));
+		return;
+	}
+
+	const json = JSON.parse(old);
+	json.push(video_link);
+	GM_setValue(STORAGE_VALUE, JSON.stringify(json));
+}
