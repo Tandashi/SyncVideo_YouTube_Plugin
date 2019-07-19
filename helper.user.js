@@ -2,7 +2,7 @@
 // @name        YouTube Sync-Video Extension
 // @namespace   https://tandashi.de
 // @author      Tandashi
-// @version     0.5
+// @version     0.6
 // @description This userscript assists sync-video from Youtube.
 // @match       *://www.youtube.com/*
 // @match       *://youtube.com/*
@@ -22,18 +22,32 @@
 // ==/UserScript==
 
 // ==Config==
-const showAt = {
+const show_at = {
 	'home': true,
 	'watch': true,
-	'results': true
+	'results': true,
+	'library': true,
+	'history': true,
+	'playlist': true,
+	'trending': true,
+	'subscriptions': true,
+	'channel' : true
 }
 
-const roomId = ""; // Leave empty if it should be randomly generated
-const randomRoomIdLength = 5; // The length of the random generated id of 'roomId' is empty
+const room_id = ""; // Leave empty if it should be randomly generated
+const random_room_id_length = 5; // The length of the random generated id of 'roomId' is empty
+
+// If true this will remove the playlist link in the video URL automatically.
+// Meaning if you try to add a video in a playlist only the one Video will be added not the whole playlist
+// Recommended: true
+const strip_playlist = true;
 // ==/Config==
 
-const buttonStyles = {
-  'home' : {
+// ==Advanced Config==
+// Can be changed but you should know what you are doing. 
+//Changing things in here could breake the look of YouTube for you.
+const button_styles = {
+  'base' : {
     'width': '50%',
     'background-color': '#b27900',
     'color': 'white',
@@ -45,7 +59,22 @@ const buttonStyles = {
     'cursor': 'pointer',
     'border-radius': '2px',
     'font-family': 'Roboto, Arial, sans-serif',
-    'text-decoration': 'none'
+		'text-decoration': 'none',
+		'z-index': '999'
+	},
+	'sidebar' : {
+		'-webkit-appearance': 'listbox',
+    'background-color': '#b27900',
+    'color': 'white',
+    'text-align': 'center',
+    'padding': '3px 4px 3px 4px',
+    'margin': '10px 10px 10px 10px',
+    'font-size': '14px',
+    'border': '0',
+    'cursor': 'pointer',
+    'border-radius': '2px',
+    'font-family': 'Roboto, Arial, sans-serif',
+		'text-decoration': 'none'
 	},
 	'watch' : {
 		'width': '100%',
@@ -60,28 +89,18 @@ const buttonStyles = {
     'border-radius': '2px',
     'font-family': 'Roboto, Arial, sans-serif',
     'text-decoration': 'none'
-	},
-	'results' : {
-    'width': '50%',
-    'background-color': '#b27900',
-    'color': 'white',
-    'text-align': 'center',
-    'padding': '1px 4px 1px 4px',
-    'margin': '10px 10px 10px 0px',
-    'font-size': '14px',
-    'border': '0',
-    'cursor': 'pointer',
-    'border-radius': '2px',
-    'font-family': 'Roboto, Arial, sans-serif',
-    'text-decoration': 'none'
-	},
+	}
 }
+// ==/Advanced Config==
+
+
+
 
 const intervals = {};
 const STORAGE_VALUE = 'syncyt';
 
 window.onload = () => {
-	var oldLocation = undefined;
+	var old_location = undefined;
 
 	// Set an Interval to check if the path location has changed
 	// The only way I found to determin if something changed
@@ -89,7 +108,7 @@ window.onload = () => {
 	// since the window will not be loaded again. The hasChanged Listener
 	// also did'nt work for me
 	intervals.main = setInterval(() => {
-		if(oldLocation === window.location.pathname)
+		if(old_location === window.location.pathname)
 			return false;
 
 		// Check which site we are on
@@ -105,7 +124,7 @@ window.onload = () => {
 				break;
 		}
 
-		oldLocation = window.location.pathname;
+		old_location = window.location.pathname;
 	}, 100);
 }
 
@@ -115,62 +134,175 @@ window.onload = () => {
  * You do not need to call any other inject Methods
  */
 function injectYoutTube() {
-	if(intervals.grid !== undefined) {
-		clearInterval(intervals.grid);
-		delete intervals.grid;
+	if(intervals.interval !== undefined) {
+		clearInterval(intervals.interval);
+		delete intervals.interval;
 	}
 
   switch(window.location.pathname) {
     case '/':
-			if(showAt.home)
-				injectYouTubeGrid(buttonStyles.home);
+			if(show_at.home)
+				injectYouTubeRenderer(button_styles.base);
 			break;
 
 		case '/results':
-			if(showAt.results)
-			injectYouTubeGrid(buttonStyles.results);
+			if(show_at.results)
+				injectYouTubeRenderer(button_styles.base);
 			break;
 
 		case '/watch':
-			if(showAt.watch)
+			if(show_at.watch)
 				injectYouTubeWatch();
+			break;
+
+		case '/feed/history':
+			if(show_at.history)
+				injectYouTubeRenderer(button_styles.base);
+			break;
+
+		case '/feed/library':
+			if(show_at.library)
+				injectYouTubeRenderer(button_styles.base);
+			break;
+
+		case '/feed/trending':
+			if(show_at.trending)
+				injectYouTubeRenderer(button_styles.base);
+			break;
+
+		case '/feed/subscriptions':
+			if(show_at.subscriptions)
+				injectYouTubeRenderer(button_styles.base);
+			break;
+			
+		case '/playlist':
+			if(show_at.playlist)
+				injectYouTubeRenderer(button_styles.base);
+			break;
+
+		// This should be used for everything that has a non-static pathname
+		// such as channels since channels have /channel/[ID]
+		default:
+			if(window.location.pathname.match('/channel/*') && show_at.channel)
+				injectYouTubeRenderer(button_styles.base);
 			break;
 	}
 }
 
 /**
- * Inject SyncVideo Buttons to YouTube when grid-video-renderer/video-rederen are used
+ * Inject SyncVideo Buttons to YouTube in intervals
+ * Use this for Home/Search/... everything that updates if you scroll basically
  *
  * @param {Object} style The Button Style
  */
-function injectYouTubeGrid(style) {
-	var oldCount = 0;
+function injectYouTubeRenderer(style) {
+	var old_count = 0;
 
-	intervals.grid = setInterval(() => {
-		const grid_videos = document.getElementsByTagName('ytd-grid-video-renderer');
-		const solo_videos = document.getElementsByTagName('ytd-video-renderer');
+	intervals.interval = setInterval(() => {
+		const grid_renderer = document.getElementsByTagName('ytd-grid-video-renderer');
+		const video_renderer = document.getElementsByTagName('ytd-video-renderer');
+		const playlist_renderer = document.getElementsByTagName('ytd-playlist-video-renderer');
+		const sidebar_renderer = document.getElementsByTagName('ytd-playlist-sidebar-renderer');
 
-		var videos = [];
-		videos = Array.prototype.concat.apply(videos, grid_videos);
-		videos = Array.prototype.concat.apply(videos, solo_videos);
+		var renderer = [];
+		renderer = Array.prototype.concat.apply(renderer, grid_renderer);
+		renderer = Array.prototype.concat.apply(renderer, video_renderer);
+		renderer = Array.prototype.concat.apply(renderer, playlist_renderer);
+		renderer = Array.prototype.concat.apply(renderer, sidebar_renderer);
 
-		if(oldCount === videos.length)
+		if(old_count === renderer.length)
 			return false;
 
-		// Loop through all Grid Videos
-		for(var vi = 0; vi < videos.length; vi++) {
-			const video = videos[vi];
-			const buttons = video.querySelector('#buttons');
+		// Loop through all renderer
+		for(var ri = 0; ri < renderer.length; ri++) {
+			const renderer_obj = renderer[ri];
 
-			if(buttons !== null && buttons !== undefined && buttons.children.length === 0) {
-				const video_link = video.querySelector('a#video-title').href;
-				buttons.appendChild(getSyncButtonBarInject(style, video_link, video_link));
-				buttons.style.margin = '10px 0px 0px 0px';
+			switch(renderer_obj.tagName.toLowerCase()) {
+				case 'ytd-grid-video-renderer':
+				case 'ytd-video-renderer':
+					addForDefaultRenderer(renderer_obj, style);
+					break;
+
+				case 'ytd-playlist-video-renderer':
+					addForPlaylistRenderer(renderer_obj, style);
+					break;
+
+				case 'ytd-playlist-sidebar-renderer':
+					addForPlaylistSidebarRenderer(renderer_obj, button_styles.sidebar);
+					break;
 			}
 		}
 
-		oldCount = videos.length;
+		old_count = renderer.length;
 	}, 1000);
+}
+
+/**
+ * Add SyncVideo Button for ytd-grid-video-renderer and ytd-video-renderer
+ * 
+ * @param {HTMLAnchorElement} renderer The renderer object
+ * @param {Object} style The Button style
+ */
+function addForDefaultRenderer(renderer, style) {
+	const buttons = renderer.querySelector('#buttons');
+
+	if(buttons !== null && buttons !== undefined && buttons.children.length === 0) {
+		const video_link = renderer.querySelector('a#video-title').href;
+		buttons.appendChild(getSyncButtonBarInject(style, video_link, video_link));
+		buttons.style.margin = '10px 0px 0px 0px';
+	}
+}
+
+/**
+ * Add SyncVideo Button for ytd-playlist-video-renderer
+ * 
+ * @param {HTMLAnchorElement} renderer The renderer object
+ * @param {Object} style The Button style
+ */
+function addForPlaylistRenderer(renderer, style) {
+	const wrap = renderer.querySelector('#meta');
+
+	// Check if we didn't already add the ButtonBar
+	if(wrap !== null && wrap !== undefined && wrap.querySelector('#syncvideo') === null) {
+		const video_link = renderer.querySelector('[href]').href;
+		wrap.appendChild(getSyncButtonBarInject(style, video_link, video_link));
+	}
+}
+
+/**
+ * Add SyncVideo Button for ytd-playlist-sidebar-renderer
+ * 
+ * @param {HTMLAnchorElement} renderer The renderer object
+ * @param {Object} style The Button style
+ */
+function addForPlaylistSidebarRenderer(renderer, style) {
+	const primary = renderer.querySelector('ytd-playlist-sidebar-primary-info-renderer');
+
+	if(primary === null || primary === undefined)
+		return;
+
+	// Check if already added.
+	if(primary.querySelector('#syncvideo') !== null)
+		return;
+
+	const badge_renderer = renderer.querySelector('ytd-badge-supported-renderer');
+
+	var playlist_private = false;
+
+	if(badge_renderer !== null && badge_renderer !== undefined) {
+		const badge = badge_renderer.querySelector('div.badge');
+			
+		if(badge !== null && badge !== undefined) 
+			playlist_private = badge.querySelector('span').textContent.toLowerCase() === 'private'
+	}
+		
+	if(!playlist_private) {
+		const menu = primary.querySelector('ytd-menu-renderer');
+		const top_level_buttons = menu.querySelector('#top-level-buttons');
+	
+		const video_link = primary.querySelector('[href]').href;
+		top_level_buttons.appendChild(getSyncButtonBarInject(style, video_link, video_link, true));	
+	}
 }
 
 /**
@@ -179,7 +311,7 @@ function injectYouTubeGrid(style) {
 function injectYouTubeWatch() {
 	const info = document.getElementsByTagName('ytd-video-primary-info-renderer')[0];
 	const container = info.querySelector('#container');
-	container.appendChild(getSyncButtonBarInject(buttonStyles.watch));
+	container.appendChild(getSyncButtonBarInject(button_styles.watch));
 }
 
 /**
@@ -207,13 +339,13 @@ function injectSyncVideo() {
  * Get SyncVideo Room ID
  */
 function getRoomId() {
-  if(roomId.length > 0)
-    return roomId;
+  if(room_id.length > 0)
+    return room_id;
 
   var id = "";
   const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-  for (var i = 0; i < randomRoomIdLength; i++){
+  for (var i = 0; i < random_room_id_length; i++){
     id += possible.charAt(Math.floor(Math.random() * possible.length));
   }
 
@@ -225,20 +357,23 @@ function getRoomId() {
  *
  * @param {Object} style The Button Style
  * @param {String} video_link Overwrite the Video link added to Storage
+ * @param {Boolean} force_nostrip Force no strip of playlist parameter
  */
-function getSyncAddButtonInject(style, video_link = window.location.href) {
-  const addButton = document.createElement("a");
-  addButton.appendChild(document.createTextNode("Sync Add"));
+function getSyncAddButtonInject(style, force_nostrip = false, video_link = window.location.href) {
+  const add_button = document.createElement('a');
+  add_button.appendChild(document.createTextNode("Sync Add"));
 
   Object.keys(style).forEach((key) => {
-    addButton.style.setProperty(key, style[key]);
+    add_button.style.setProperty(key, style[key]);
   });
 
-  addButton.onclick = () => {
-  	addVideoToStorage(video_link);
+  add_button.onclick = (e) => {
+		e.cancelBubble = true;
+		addVideoToStorage(video_link, force_nostrip);
+		return false;
   }
 
-  return addButton;
+  return add_button;
 }
 
 /**
@@ -246,22 +381,24 @@ function getSyncAddButtonInject(style, video_link = window.location.href) {
  *
  * @param {Object} style The Button Style
  * @param {String} video_link Overwrite the Video link added to Storage
+ * @param {Boolean} force_nostrip Force no strip of playlist parameter
  */
-function getSyncCreateButtonInject(style, video_link = window.location.href) {
-  const createButton = document.createElement("a");
-  createButton.appendChild(document.createTextNode("Sync Create"));
+function getSyncCreateButtonInject(style, force_nostrip = false, video_link = window.location.href) {
+  const create_button = document.createElement('a');
+  create_button.appendChild(document.createTextNode("Sync Create"));
 
   Object.keys(style).forEach((key) => {
-    createButton.style.setProperty(key, style[key]);
+    create_button.style.setProperty(key, style[key]);
   });
 
-  createButton.href = "https://sync-video.com/r/" + getRoomId();
-  createButton.target = "_blank";
-  createButton.onclick = () => {
-    addVideoToStorage(video_link);
+  create_button.href = "https://sync-video.com/r/" + getRoomId();
+  create_button.target = "_blank";
+  create_button.onclick = (e) => {
+		e.cancelBubble = true;
+		addVideoToStorage(video_link, force_nostrip);
 	}
 
-  return createButton;
+  return create_button;
 }
 
 /**
@@ -270,28 +407,28 @@ function getSyncCreateButtonInject(style, video_link = window.location.href) {
  * @param {Object} style The Button Style
  * @param {String} create_video_link Video link added to Storage if create button clicked. Null = default
  * @param {String} add_video_link Video link added to Storage if add button clicked. Null = default
+ * @param {Boolean} force_nostrip Force no strip of playlist parameter
  */
-function getSyncButtonBarInject(style, create_video_link = null, add_video_link = null) {
+function getSyncButtonBarInject(style, create_video_link = null, add_video_link = null, force_nostrip = false) {
   const buttonBar = document.createElement("span");
   buttonBar.style.width = "100%";
-  buttonBar.id = "syncvideo";
+	buttonBar.id = "syncvideo";
 
-  var createButton, addButton;
+  var create_button, add_button;
 
   if(create_video_link !== null)
-    createButton = getSyncCreateButtonInject(style, create_video_link);
+    create_button = getSyncCreateButtonInject(style, force_nostrip, create_video_link);
   else
-    createButton = getSyncCreateButtonInject(style);
-
-  buttonBar.appendChild(createButton);
+    create_button = getSyncCreateButtonInject(style, force_nostrip);
+  buttonBar.appendChild(create_button);
 
 
   if(add_video_link !== null)
-    addButton = getSyncAddButtonInject(style, add_video_link);
+    add_button = getSyncAddButtonInject(style, force_nostrip, add_video_link);
   else
-    addButton = getSyncAddButtonInject(style);
-
-  buttonBar.appendChild(addButton);
+    add_button = getSyncAddButtonInject(style, force_nostrip);
+	buttonBar.appendChild(add_button);
+	
   return buttonBar;
 }
 
@@ -322,8 +459,13 @@ function getNextVideoInStorage(should_delete = true) {
  * Add a Video URL to the Storage to be added to SyncVideo
  *
  * @param {String} video_link The Video URL to store
+ * @param {Boolean} force_nostrip Force no strip of playlist parameter
  */
-function addVideoToStorage(video_link) {
+function addVideoToStorage(video_link, force_nostrip = false) {
+	if(strip_playlist && !force_nostrip) {
+		video_link = removeQueryParameter(video_link, 'list');
+	}
+
 	const old = GM_getValue(STORAGE_VALUE, null);
 
 	if(old === null) {
@@ -334,4 +476,16 @@ function addVideoToStorage(video_link) {
 	const json = JSON.parse(old);
 	json.push(video_link);
 	GM_setValue(STORAGE_VALUE, JSON.stringify(json));
+}
+
+/**
+ * 
+ * Credit: https://www.quora.com/How-do-I-remove-a-specific-key-value-pair-in-a-query-string-without-reloading-using-JavaScript
+ * 
+ * @param {String} url The URL
+ * @param {String} parameter_name The parameter that should be removed
+ */
+function removeQueryParameter(url, parameter_name) {
+	const [head, tail] = url.split('?');
+	return head + '?' + tail.replace(new RegExp(`&${parameter_name}=[^&]*|${parameter_name}=[^&]*&`), '');
 }
