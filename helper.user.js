@@ -2,7 +2,7 @@
 // @name        YouTube Sync-Video Extension
 // @namespace   https://tandashi.de
 // @author      Tandashi
-// @version     0.6.2
+// @version     0.7
 // @description This userscript assists sync-video from Youtube.
 // @match       *://www.youtube.com/*
 // @match       *://youtube.com/*
@@ -19,6 +19,7 @@
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_deleteValue
+// @grant    		GM_setClipboard
 // ==/UserScript==
 
 // ==Config==
@@ -41,6 +42,10 @@ const random_room_id_length = 5; // The length of the random generated id of 'ro
 // Meaning if you try to add a video in a playlist only the one Video will be added not the whole playlist
 // Recommended: true
 const strip_playlist = true;
+
+// Copy link of SyncVideo Room automatically to clipboard 
+// when you press the create button
+const auto_copy = true;
 // ==/Config==
 
 // ==Advanced Config==
@@ -401,6 +406,10 @@ function getSyncCreateButtonInject(style, force_nostrip = false, video_link = wi
   create_button.onclick = (e) => {
 		e.cancelBubble = true;
 		addVideoToStorage(video_link, force_nostrip);
+
+		if(auto_copy) {
+			GM_setClipboard(create_button.href);
+		}
 	}
 
   return create_button;
