@@ -2,7 +2,7 @@
 // @name        YouTube Sync-Video Extension
 // @namespace   https://tandashi.de
 // @author      Tandashi
-// @version     0.6
+// @version     0.6.1
 // @description This userscript assists sync-video from Youtube.
 // @match       *://www.youtube.com/*
 // @match       *://youtube.com/*
@@ -311,7 +311,9 @@ function addForPlaylistSidebarRenderer(renderer, style) {
 function injectYouTubeWatch() {
 	const info = document.getElementsByTagName('ytd-video-primary-info-renderer')[0];
 	const container = info.querySelector('#container');
-	container.appendChild(getSyncButtonBarInject(button_styles.watch));
+
+	if(container.querySelector('#syncvideo') === null)
+		container.appendChild(getSyncButtonBarInject(button_styles.watch));
 }
 
 /**
