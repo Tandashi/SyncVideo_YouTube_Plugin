@@ -2,7 +2,7 @@
 // @name        YouTube Sync-Video Extension
 // @namespace   https://tandashi.de
 // @author      Tandashi
-// @version     0.6.1
+// @version     0.6.2
 // @description This userscript assists sync-video from Youtube.
 // @match       *://www.youtube.com/*
 // @match       *://youtube.com/*
@@ -184,6 +184,9 @@ function injectYoutTube() {
 		// such as channels since channels have /channel/[ID]
 		default:
 			if(window.location.pathname.match('/channel/*') && show_at.channel)
+				injectYouTubeRenderer(button_styles.base);
+
+			if(window.location.pathname.match('/user/*') && show_at.channel)
 				injectYouTubeRenderer(button_styles.base);
 			break;
 	}
