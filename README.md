@@ -1,4 +1,7 @@
 # SyncVideo YouTube Plugin
+
+# **NOT WORKING ANYMORE**
+
 ## Requirements
 For this to work you need the Tempermonkey Extension for your Browser.
 
