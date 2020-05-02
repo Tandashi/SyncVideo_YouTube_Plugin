@@ -3,9 +3,9 @@
 # **NOT WORKING ANYMORE**
 
 ## Requirements
-For this to work you need the Tempermonkey Extension for your Browser.
+For this to work you need the Tampermonkey Extension for your Browser.
 
-You can get Tempermonkey from here:  
+You can get Tampermonkey from here:  
 [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)  
 [Opera](https://addons.opera.com/en/extensions/details/tampermonkey-beta/)  
 [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)  
