@@ -1,6 +1,6 @@
 # SyncVideo YouTube Plugin
 
-# **NOT WORKING ANYMORE**
+# **NOT WORKING ANYMORE** Please use [YTSync](https://github.com/Tandashi/YTSync-Plugin)
 
 ## Requirements
 For this to work you need the Tampermonkey Extension for your Browser.
